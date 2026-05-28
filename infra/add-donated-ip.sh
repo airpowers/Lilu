@@ -1,21 +1,28 @@
 #!/usr/bin/env bash
-# Добавить новый донорский IP в систему
-# Запускать на VM2 (176.99.153.88) от root
+# Добавить новый донорский IPv4 в систему на VM2 (176.99.153.88)
+# Запускать от root
 #
-# Использование: bash add-donated-ip.sh <ip> [vm_bridge]
+# Использование: bash add-donated-ip.sh <ip> [bridge]
 # Пример:        bash add-donated-ip.sh 176.12.65.60
-# Пример:        bash add-donated-ip.sh 176.12.65.60 vmbr1
+#
+# Для IPv6 — просто назначьте адрес из 2a01:230:4:df2:100::/80 внутри VM.
+# Маршрут для всего /80 уже настроен в wg0-postup.sh.
 
 set -euo pipefail
 
-NEW_IP="${1:?Укажите IP: bash add-donated-ip.sh <ip>}"
+NEW_IP="${1:?Использование: bash add-donated-ip.sh <ipv4>}"
 VM_BRIDGE="${2:-vmbr0}"
 POSTUP="/etc/wireguard/wg0-postup.sh"
-WG_CONF_VM1="/etc/wireguard/wg0.conf"
+PBR_TABLE="viavm1"
 
-echo "Добавляю $NEW_IP → $VM_BRIDGE"
+if [[ ! -f "$POSTUP" ]]; then
+    echo "Ошибка: $POSTUP не найден"
+    exit 1
+fi
 
-# 1. Добавить в wg0-postup.sh
+echo "Добавляю IPv4 $NEW_IP → $VM_BRIDGE"
+
+# 1. Добавить в DONATED_V4 если ещё нет
 if grep -q "\"$NEW_IP\"" "$POSTUP"; then
     echo "  [уже есть] $NEW_IP в $POSTUP"
 else
@@ -23,28 +30,28 @@ else
     echo "  [+] Добавлен в DONATED_V4 в $POSTUP"
 fi
 
-# 2. Применить маршрут сразу (без рестарта WireGuard)
-PBR_TABLE="viavm1"
+# 2. Применить маршрут сразу
 ip route replace "${NEW_IP}/32" dev "$VM_BRIDGE"
 echo 1 > "/proc/sys/net/ipv4/conf/${VM_BRIDGE}/proxy_arp"
 ip rule show | grep -q "from ${NEW_IP}" || \
     ip rule add from "${NEW_IP}/32" table "$PBR_TABLE" priority 100
 echo "  [+] Маршрут и ip rule применены"
 
-# 3. Напомнить про VM1
+# 3. Инструкции для VM1
 echo ""
-echo "Осталось на VM1 (157.22.199.180):"
-echo "  Добавить в /etc/wireguard/wg0.conf в секцию [Peer] AllowedIPs:"
-echo "  $NEW_IP/32"
+echo "На VM1 (157.22.199.180) добавьте в /etc/wireguard/wg0.conf:"
+echo "  AllowedIPs += $NEW_IP/32"
 echo ""
-echo "  Затем применить:"
-echo "  ssh root@157.22.199.180 \"ip route replace $NEW_IP/32 dev wg0 && wg set wg0 peer \$(wg show wg0 peers) allowed-ips \$(wg show wg0 allowed-ips | awk '{print \$2}'),$NEW_IP/32\""
+echo "Затем применить на VM1:"
+echo "  systemctl reload wg-quick@wg0 || wg set wg0 peer <pubkey> allowed-ips ...,${NEW_IP}/32"
+echo "  ip route replace ${NEW_IP}/32 dev wg0"
 echo ""
-echo "  Или просто перезапустить WireGuard на VM1:"
-echo "  ssh root@157.22.199.180 'systemctl restart wg-quick@wg0'"
-echo ""
-echo "Настройка внутри VM:"
-echo "  ip addr add $NEW_IP/32 dev eth0"
+echo "Настройка внутри VM (IPv4):"
+echo "  ip addr add ${NEW_IP}/32 dev eth0"
 echo "  ip route add default via 176.99.153.88"
 echo ""
-echo "Готово."
+echo "Настройка внутри VM (IPv6 из пула 2a01:230:4:df2:100::/80):"
+GW6=$(ip -6 addr show "$VM_BRIDGE" | awk '/fe80/{gsub("/.*","",$2); print $2; exit}')
+echo "  ip addr add 2a01:230:4:df2:100::<выберите>/128 dev eth0"
+echo "  ip -6 route add default via ${GW6:-<link-local vmbr0>} dev eth0"
+echo "  (link-local шлюза: ${GW6:-запустите: ip -6 addr show $VM_BRIDGE | grep fe80})"
