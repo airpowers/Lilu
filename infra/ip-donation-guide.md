@@ -91,8 +91,25 @@ ip -6 route replace 2a01:230:4:df2::XX/128 dev vmbr0
 ```
 iface eth0 inet6 static
     address 2a01:230:4:df2::XX/128
-    gateway fe80::201:2eff:fea2:ccc5
+    post-up   ip -6 route replace default via fe80::201:2eff:fea2:ccc5 dev eth0
+    pre-down  ip -6 route del default via fe80::201:2eff:fea2:ccc5 dev eth0 2>/dev/null || true
 ```
+
+> **Важно:** не используй `gateway fe80::...` — ifupdown не умеет указывать `dev` для link-local шлюзов,
+> поэтому `ip -6 route add` упадёт. Используй `post-up`/`pre-down` с явным `dev`.
+>
+> **Полный пример** (ens18 вместо eth0, если так называется интерфейс):
+> ```
+> auto ens18
+> iface ens18 inet static
+>     address 176.12.65.XX/32
+>     gateway 176.99.153.88
+>
+> iface ens18 inet6 static
+>     address 2a01:230:4:df2::XX/128
+>     post-up   ip -6 route replace default via fe80::201:2eff:fea2:ccc5 dev ens18
+>     pre-down  ip -6 route del default via fe80::201:2eff:fea2:ccc5 dev ens18 2>/dev/null || true
+> ```
 
 ---
 
