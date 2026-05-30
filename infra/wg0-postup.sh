@@ -4,17 +4,14 @@
 #
 # Добавить новый донорский IPv4:
 #   1. Добавить IP в DONATED_V4
-#   2. Добавить IP/32 в AllowedIPs в /etc/wireguard/wg0.conf на VM1
+#   2. Добавить IP/32 в AllowedIPs и PostUp на VM1 (/etc/wireguard/wg0.conf)
 #   3. Применить: /etc/wireguard/wg0-postup.sh down && /etc/wireguard/wg0-postup.sh up
 #
-# Добавить новый донорский IPv6 (из префикса DONATED_V6_PREFIX):
-#   Ничего менять не нужно — весь /80 уже маршрутизируется на вmbr0.
-#   Просто назначьте адрес из префикса внутри VM.
-#
-# Настройка VM для донорского IP:
-#   IPv4: address <ip>/32, gateway 176.99.153.88
-#   IPv6: address 2a01:230:4:df2:100::<любой>/128, gateway <link-local vmbr0>
-#         Узнать link-local: ip -6 addr show vmbr0 | grep fe80
+# Добавить новый донорский IPv6 (из префикса 2a01:230:4:df2::/64):
+#   Ничего менять здесь не нужно — весь /64 маршрутизируется на vmbr0.
+#   На VM1 добавить /128 маршрут и NDP proxy для нового адреса.
+#   Внутри VM: address 2a01:230:4:df2::XX/128, gateway <link-local vmbr0>
+#   (link-local: ip -6 addr show vmbr0 | grep fe80)
 
 WG_PEER_GW4="10.99.0.1"
 WG_PEER_GW6="fd00::1"
@@ -27,7 +24,7 @@ DONATED_V4=(
     "176.12.65.56"
 )
 
-DONATED_V6_PREFIX="2a01:230:4:df2:100::/80"
+DONATED_V6_PREFIX="2a01:230:4:df2::/64"
 
 case "$1" in
   up)
@@ -47,7 +44,7 @@ case "$1" in
             ip rule add from ${ip4}/32 table ${PBR_TABLE} priority 100
     done
 
-    # --- IPv6: proxy NDP + маршрут всего /80 префикса на мост ---
+    # --- IPv6: proxy NDP + маршрут всего /64 префикса на мост ---
     echo 1 > /proc/sys/net/ipv6/conf/${VM_BRIDGE}/proxy_ndp
     echo 1 > /proc/sys/net/ipv6/conf/${WG_DEV}/proxy_ndp
     ip -6 route replace ${DONATED_V6_PREFIX} dev ${VM_BRIDGE} 2>/dev/null || true
