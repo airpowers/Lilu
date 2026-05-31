@@ -59,9 +59,7 @@ PostDown = ip -6 neigh del proxy 2a01:230:4:df2::a1 dev ens3 2>/dev/null || true
 [Peer]
 PublicKey           = 1FhRTd/plDjoLrDvu6E7gHGlFS3xk+rhtlEUV2KFkBk=
 Endpoint            = 176.99.153.88:51820
-AllowedIPs          = 10.99.0.2/32, fd00::2/128,
-                      176.12.65.52/32, 176.12.65.56/32,
-                      2a01:230:4:df2::55/128, 2a01:230:4:df2::77/128, 2a01:230:4:df2::a1/128
+AllowedIPs          = 10.99.0.2/32, fd00::2/128, 176.12.65.52/32, 176.12.65.56/32, 2a01:230:4:df2::55/128, 2a01:230:4:df2::77/128, 2a01:230:4:df2::a1/128
 PersistentKeepalive = 25
 EOF
 chmod 600 /etc/wireguard/wg0.conf
